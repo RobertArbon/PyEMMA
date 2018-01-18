@@ -697,41 +697,6 @@ class MaximumLikelihoodHMSM(_Estimator, _HMSM):
         ck.estimate(self._dtrajs_full)
         return ck
 
-    def score(self, dtrajs=None, score_method='BIC'):
-        """ Scores model using BIC or AIC test.
-
-        Parameters
-        ----------
-        dtrajs : None, likelihood of model is already stored so
-        score_method : str, optional, default='BIC'
-
-        Returns
-        -------
-        float : BIC/AIC value.
-
-        """
-        if dtrajs is not None:
-            raise Warning('dtrajs are ignored in HMM scoring function')
-
-        loglike = self.likelihood
-        n =1
-        N = self.metastable_distributions.shape[1]
-        M = self.metastable_distributions.shape[0]
-        dof = N*(M-1) # Emission probabilities add to one.
-        if self.reversible:
-            dof += (1/2)*N*(N-1) + N - 1
-        else:
-            dof += N*(N-1)
-
-
-        if (self.separate is not None) or self.observe_nonempty or (self.connectivity is None) or self.connectivity=='all':
-            raise NotImplementedError("score: DoF's not calculated for these constraints")
-
-        if score_method=='BIC':
-            score = 0
-        else:
-            score = 0
-        return score
 
 
 
