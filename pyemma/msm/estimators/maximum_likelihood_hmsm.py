@@ -150,6 +150,9 @@ class MaximumLikelihoodHMSM(_Estimator, _HMSM):
         self.dt_traj = dt_traj
         self.accuracy = accuracy
         self.maxit = maxit
+        self.BIC = 0
+        self.AIC = 0
+        self.score_params = {'numHiddenStates': 0, 'numObservedStates': 0, 'dof': 0, 'numData': 0, 'loglike': 0}
 
     @property
     def dt_traj(self):
@@ -194,6 +197,7 @@ class MaximumLikelihoodHMSM(_Estimator, _HMSM):
         # LAG AND STRIDE DATA
         dtrajs_lagged_strided = bhmm.lag_observations(dtrajs, self.lag, stride=self.stride)
 
+
         # OBSERVATION SET
         if self.observe_nonempty:
             observe_subset = 'nonempty'
@@ -231,8 +235,14 @@ class MaximumLikelihoodHMSM(_Estimator, _HMSM):
         hmm_est = _MaximumLikelihoodEstimator(dtrajs_lagged_strided, self.nstates, initial_model=hmm_init,
                                               output='discrete', reversible=self.reversible, stationary=self.stationary,
                                               accuracy=self.accuracy, maxit=self.maxit)
+
+
         # run
         hmm_est.fit()
+        # calculate total number of observations.
+        print(hmm_est.count_matrix.shape)
+        self.tot_counts = _np.sum(hmm_est.count_matrix)
+        print(hmm_est.count_matrix)
         # package in discrete HMM
         self.hmm = bhmm.DiscreteHMM(hmm_est.hmm)
 
@@ -268,6 +278,32 @@ class MaximumLikelihoodHMSM(_Estimator, _HMSM):
             states_subset = 'largest-strong'
         elif self.connectivity == 'populous':
             states_subset = 'populous-strong'
+
+        # ---------------------------------------------------------------------------------------
+        # Score model using BIC and AIC
+        # ---------------------------------------------------------------------------------------
+        loglike = self.likelihood # log likelihood
+        n = _np.sum(self.count_matrix) # Number of data points
+        N = self.metastable_distributions.shape[1] # Num hidden states
+        M = self.metastable_distributions.shape[0] # Num observed states
+        dof = N*(M-1) # Emission probabilities add to one.
+        if self.reversible:
+            dof += (1/2)*N*(N-1) + N - 1
+        else:
+            dof += N*(N-1)
+
+        if (self.separate is not None) or self.observe_nonempty or (self.connectivity is None) or \
+            self.connectivity=='all':
+            raise Warning("BIC/AIC not available for these constraints")
+        else:
+            self.BIC = _np.log(n)*dof - 2*loglike
+            self.AIC = 2*dof - 2*loglike
+
+            self.score_params['numHiddenStates'] = N
+            self.score_params['numObservedStates'] = M
+            self.score_params['numData'] = n
+            self.score_params['loglike'] = loglike
+            self.score_params['dof'] = dof
 
         # return submodel (will return self if all None)
         return self.submodel(states=states_subset, obs=observe_subset, mincount_connectivity=self.mincount_connectivity)
@@ -660,3 +696,42 @@ class MaximumLikelihoodHMSM(_Estimator, _HMSM):
                                         n_jobs=n_jobs, show_progress=show_progress)
         ck.estimate(self._dtrajs_full)
         return ck
+
+    def score(self, dtrajs=None, score_method='BIC'):
+        """ Scores model using BIC or AIC test.
+
+        Parameters
+        ----------
+        dtrajs : None, likelihood of model is already stored so
+        score_method : str, optional, default='BIC'
+
+        Returns
+        -------
+        float : BIC/AIC value.
+
+        """
+        if dtrajs is not None:
+            raise Warning('dtrajs are ignored in HMM scoring function')
+
+        loglike = self.likelihood
+        n =1
+        N = self.metastable_distributions.shape[1]
+        M = self.metastable_distributions.shape[0]
+        dof = N*(M-1) # Emission probabilities add to one.
+        if self.reversible:
+            dof += (1/2)*N*(N-1) + N - 1
+        else:
+            dof += N*(N-1)
+
+
+        if (self.separate is not None) or self.observe_nonempty or (self.connectivity is None) or self.connectivity=='all':
+            raise NotImplementedError("score: DoF's not calculated for these constraints")
+
+        if score_method=='BIC':
+            score = 0
+        else:
+            score = 0
+        return score
+
+
+
